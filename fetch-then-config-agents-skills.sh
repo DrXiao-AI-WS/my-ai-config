@@ -146,15 +146,19 @@ echo "Linked $skill_count skill(s) into $SKILLS_DIR"
 # Expose the aggregated agents/skills directories to other AI coding
 # tools via symlinks, so this repo stays the single source of truth
 # instead of duplicating files per tool.
-#   Claude      -> ~/.claude/agents, ~/.claude/skills
-#   Codex       -> ~/.codex/agents
+#   Claude      -> $CLAUDE_CONFIG_DIR/agents, $CLAUDE_CONFIG_DIR/skills
+#                  (CLAUDE_CONFIG_DIR defaults to ~/.claude)
+#   Codex       -> $CODEX_HOME/agents (CODEX_HOME defaults to ~/.codex)
 #   Copilot     -> ~/.copilot/agents
 #   OpenCode    -> ~/.config/opencode/agents
 #   Antigravity -> ~/.gemini/config/agents, ~/.gemini/config/skills
+CLAUDE_HOME_DIR="${CLAUDE_CONFIG_DIR:-$HOME/.claude}"
+CODEX_HOME_DIR="${CODEX_HOME:-$HOME/.codex}"
+
 external_links=(
-  "$HOME/.claude/agents|$AGENTS_DIR"
-  "$HOME/.claude/skills|$SKILLS_DIR"
-  "$HOME/.codex/agents|$AGENTS_DIR"
+  "$CLAUDE_HOME_DIR/agents|$AGENTS_DIR"
+  "$CLAUDE_HOME_DIR/skills|$SKILLS_DIR"
+  "$CODEX_HOME_DIR/agents|$AGENTS_DIR"
   "$HOME/.copilot/agents|$AGENTS_DIR"
   "$HOME/.config/opencode/agents|$AGENTS_DIR"
   "$HOME/.gemini/config/agents|$AGENTS_DIR"
