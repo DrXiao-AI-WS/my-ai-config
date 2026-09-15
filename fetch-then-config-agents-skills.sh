@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 #
 # fetch-then-config-agents-skills.sh — Clone/update a built-in list of
-# public "agents & skills" repos into ./source, then scan that tree and
-# (re)create symbolic links to the agents/skills it contains under
-# ~/.agents/agents and ~/.agents/skills. Finally, expose those two
-# directories to other AI coding tools (Claude, Codex, Copilot, OpenCode,
-# Google Antigravity) via symlinks so this directory is the single source
-# of truth.
+# public "agents & skills" repos into ./source, then scan that tree plus
+# this repo's own hand-authored ./local tree, and (re)create symbolic
+# links to the agents/skills found in either under ~/.agents/agents and
+# ~/.agents/skills. Finally, expose those two directories to other AI
+# coding tools (Claude, Codex, Copilot, OpenCode, Google Antigravity) via
+# symlinks so this directory is the single source of truth.
 #
 # Detection is content-based rather than name-based, so it works no matter
 # how deeply agents/skills are nested inside a cloned repository:
@@ -33,6 +33,12 @@ AIWS_DIR="$HOME/.agents"
 SOURCE_DIR="${1:-$AIWS_DIR/source}"
 AGENTS_DIR="$AIWS_DIR/agents"
 SKILLS_DIR="$AIWS_DIR/skills"
+
+# Hand-authored agents/skills tracked in this repo (as opposed to $SOURCE_DIR,
+# which holds reproducible clones of external repos). Scanned as a second
+# source root alongside $SOURCE_DIR so self-authored ones are aggregated the
+# same way as fetched ones.
+LOCAL_DIR="$SCRIPT_DIR/local"
 
 # Ensure ~/.agents is a symlink to this repo (idempotent, non-destructive).
 link_agents_home() {
@@ -102,7 +108,7 @@ if [[ ! -d "$SOURCE_DIR" ]]; then
 fi
 
 SOURCE_DIR="$(realpath -m "$SOURCE_DIR")"
-mkdir -p "$AGENTS_DIR" "$SKILLS_DIR"
+mkdir -p "$AGENTS_DIR" "$SKILLS_DIR" "$LOCAL_DIR/agents" "$LOCAL_DIR/skills"
 
 # Drop stale symlinks left over from previous runs whose source no longer
 # exists, so removed/renamed agents and skills don't linger.
@@ -129,7 +135,7 @@ while IFS= read -r -d '' agents_dir; do
     echo "Found agent: $name (in $agents_dir)"
     agent_count=$((agent_count + 1))
   done < <(find "$agents_dir" -maxdepth 1 -type f -name '*.md' -print0 | sort -z)
-done < <(find "$SOURCE_DIR" -type d -name agents -print0 | sort -z)
+done < <(find "$SOURCE_DIR" "$LOCAL_DIR" -type d -name agents -print0 | sort -z)
 
 skill_count=0
 while IFS= read -r -d '' skill_md; do
@@ -138,7 +144,7 @@ while IFS= read -r -d '' skill_md; do
   link_into "$skill_dir" "$SKILLS_DIR" "$name"
   echo "Found skill: $name (in $skill_dir)"
   skill_count=$((skill_count + 1))
-done < <(find "$SOURCE_DIR" -type f -name 'SKILL.md' -print0 | sort -z)
+done < <(find "$SOURCE_DIR" "$LOCAL_DIR" -type f -name 'SKILL.md' -print0 | sort -z)
 
 echo "Linked $agent_count agent(s) into $AGENTS_DIR"
 echo "Linked $skill_count skill(s) into $SKILLS_DIR"
