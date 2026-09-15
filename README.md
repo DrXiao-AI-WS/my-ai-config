@@ -1,4 +1,4 @@
-# my-agents-skills-config
+# my-ai-config
 
 Aggregates public "agents & skills" repositories for AI coding tools (Claude
 Code, Codex, GitHub Copilot, OpenCode, Google Antigravity) into a single
