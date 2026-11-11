@@ -115,14 +115,22 @@ mkdir -p "$AGENTS_DIR" "$SKILLS_DIR" "$LOCAL_DIR/agents" "$LOCAL_DIR/skills"
 find "$AGENTS_DIR" "$SKILLS_DIR" -maxdepth 1 -xtype l -delete
 
 # Create (or refresh) a relative symlink named $3 inside directory $2,
-# pointing at $1. Warns if a differing link/entry with the same name
-# already exists (name collision between two source repos).
+# pointing at $1. Warns when it replaces a link to a different target
+# (name collision between two sources), and refuses to touch anything
+# that is not a symlink: "ln -sfn" would silently create the link inside
+# an existing real directory instead of replacing it.
 link_into() {
   local target="$1" link_dir="$2" name="$3" dest rel
   dest="$link_dir/$name"
   rel="$(realpath --relative-to="$link_dir" "$target")"
-  if [[ -e "$dest" || -L "$dest" ]] && [[ "$(readlink -- "$dest" 2>/dev/null || true)" != "$rel" ]]; then
-    echo "Warning: '$name' already exists in $link_dir, overwriting with $target" >&2
+  if [[ -L "$dest" ]]; then
+    if [[ "$(readlink -- "$dest")" != "$rel" ]]; then
+      echo "Warning: '$name' in $link_dir now points at $target" >&2
+    fi
+  elif [[ -e "$dest" ]]; then
+    echo "Error: $dest exists and is not a symlink. Move or remove it" >&2
+    echo "manually, then re-run this script." >&2
+    return 1
   fi
   ln -sfn "$rel" "$dest"
 }
