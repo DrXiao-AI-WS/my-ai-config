@@ -27,7 +27,7 @@ set -euo pipefail
 
 # Directory this script lives in (i.e. this repo checkout), regardless of
 # what it's named or where it was cloned.
-SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd)"
+SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)"
 
 AIWS_DIR="$HOME/.agents"
 SOURCE_DIR="${1:-$AIWS_DIR/source}"
