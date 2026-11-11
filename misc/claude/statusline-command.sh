@@ -2,24 +2,35 @@
 # Claude Code status line: Model / Context / Rate Limit / Cost
 # Reads the status line JSON payload from stdin.
 
-input=$(cat)
-
-# --- Model ---
-model_name=$(echo "$input" | jq -r '.model.display_name // "unknown"')
-effort=$(echo "$input" | jq -r '.effort.level // empty')
-thinking=$(echo "$input" | jq -r 'if .thinking.enabled == true then "thinking" else empty end')
-
-# --- Context ---
-ctx_used=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
-ctx_size=$(echo "$input" | jq -r '.context_window.context_window_size // empty')
-ctx_in=$(echo "$input" | jq -r '.context_window.total_input_tokens // empty')
-ctx_out=$(echo "$input" | jq -r '.context_window.total_output_tokens // empty')
-
-# --- Rate limits ---
-five_pct=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty')
-five_reset_at=$(echo "$input" | jq -r '.rate_limits.five_hour.resets_at // empty')
-week_pct=$(echo "$input" | jq -r '.rate_limits.seven_day.used_percentage // empty')
-week_reset_at=$(echo "$input" | jq -r '.rate_limits.seven_day.resets_at // empty')
+# Extract every field in a single jq pass; the status line re-renders
+# often, and one process per field adds up. Fields are joined with the
+# ASCII unit separator, which (unlike tab) is not IFS whitespace, so
+# empty fields keep their position. Absent fields come out empty and
+# their segment is skipped below. Cost fields exist only in some Claude
+# Code versions, and durations may be fractional, so floor them here.
+IFS=$'\x1f' read -r model_name effort thinking \
+  ctx_used ctx_size ctx_in ctx_out \
+  five_pct five_reset_at week_pct week_reset_at \
+  cost_usd lines_add lines_del dur_s < <(
+  jq -r 'def whole: if type == "number" then floor else null end;
+  [
+    .model.display_name // "unknown",
+    .effort.level,
+    (if .thinking.enabled == true then "thinking" else null end),
+    .context_window.used_percentage,
+    .context_window.context_window_size,
+    .context_window.total_input_tokens,
+    .context_window.total_output_tokens,
+    .rate_limits.five_hour.used_percentage,
+    (.rate_limits.five_hour.resets_at | whole),
+    .rate_limits.seven_day.used_percentage,
+    (.rate_limits.seven_day.resets_at | whole),
+    .cost.total_cost_usd,
+    .cost.total_lines_added,
+    .cost.total_lines_removed,
+    (.cost.total_duration_ms | if type == "number" then . / 1000 | whole else null end)
+  ] | map(. // "" | tostring) | join("\u001f")'
+)
 
 # Format seconds remaining until a given epoch as "Xd Yh Zm" (only non-zero, largest units first)
 format_remaining() {
@@ -42,12 +53,6 @@ format_remaining() {
 
 five_remaining=$(format_remaining "$five_reset_at")
 week_remaining=$(format_remaining "$week_reset_at")
-
-# --- Cost (present in some Claude Code versions; skipped gracefully if absent) ---
-cost_usd=$(echo "$input" | jq -r '.cost.total_cost_usd // empty')
-lines_add=$(echo "$input" | jq -r '.cost.total_lines_added // empty')
-lines_del=$(echo "$input" | jq -r '.cost.total_lines_removed // empty')
-dur_ms=$(echo "$input" | jq -r '.cost.total_duration_ms // empty')
 
 # --- Colors ---
 RESET='\033[0m'
@@ -100,10 +105,7 @@ if [ -n "$cost_usd" ]; then
   if [ -n "$lines_add" ] && [ -n "$lines_del" ]; then
     cost_seg="${cost_seg} (+${lines_add}/-${lines_del})"
   fi
-  if [ -n "$dur_ms" ]; then
-    dur_s=$(( dur_ms / 1000 ))
-    cost_seg="${cost_seg} ${dur_s}s"
-  fi
+  [ -n "$dur_s" ] && cost_seg="${cost_seg} ${dur_s}s"
 fi
 
 out="${model_seg}\n${ctx_seg}"
