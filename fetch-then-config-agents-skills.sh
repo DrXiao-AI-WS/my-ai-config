@@ -11,8 +11,10 @@
 # Detection is content-based rather than name-based, so it works no matter
 # how deeply agents/skills are nested inside a cloned repository:
 #   - Agent   = a *.md file that lives directly inside a directory named
-#               "agents" (this skips per-skill "agents" metadata folders
-#               that only hold non-agent files, e.g. openai.yaml).
+#               "agents" and opens with YAML frontmatter declaring a
+#               "name:" (this skips per-skill "agents" metadata folders
+#               that only hold non-agent files, e.g. openai.yaml, and
+#               plain documentation that happens to sit under docs/agents).
 #   - Skill   = any directory that directly contains a SKILL.md file.
 # Directories named in EXCLUDE_DIRS (unfinished or retired upstream work,
 # vendored dependencies) are never scanned. On a name collision the
@@ -151,6 +153,17 @@ link_into() {
   ln -sfn "$rel" "$dest"
 }
 
+# Succeed if file $1 opens with a YAML frontmatter block that declares a
+# "name:" key, which every agent definition does and plain docs do not.
+is_agent_file() {
+  awk '
+    NR == 1 { if ($0 !~ /^---[[:space:]]*$/) exit 1; next }
+    /^---[[:space:]]*$/ { exit 1 }
+    /^name:[[:space:]]*[^[:space:]]/ { found = 1; exit 0 }
+    END { if (!found) exit 1 }
+  ' "$1"
+}
+
 # Record target $3 as the source for name $2 in the associative array
 # named $1, noting when it replaces an earlier source of the same name.
 choose() {
@@ -186,6 +199,10 @@ declare -A agent_targets=() skill_targets=()
 for root in "$SOURCE_DIR" "$LOCAL_DIR"; do
   while IFS= read -r -d '' agents_dir; do
     while IFS= read -r -d '' agent_md; do
+      if ! is_agent_file "$agent_md"; then
+        echo "Skipping non-agent file: $agent_md"
+        continue
+      fi
       choose agent_targets "$(basename "$agent_md")" "$agent_md"
     done < <(find "$agents_dir" -maxdepth 1 -type f -name '*.md' -print0 | sort -z)
   done < <(scan "$root" -type d -name agents)

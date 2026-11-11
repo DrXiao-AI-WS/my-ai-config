@@ -12,7 +12,8 @@ per tool.
 
 1. Clones/updates a built-in list of public repos into `./source`.
 2. Scans that tree, plus this repo's own `./local` tree, for agents
-   (`*.md` files directly inside a directory named `agents`) and skills
+   (`*.md` files directly inside a directory named `agents` whose YAML
+   frontmatter declares a `name`) and skills
    (any directory directly containing a `SKILL.md`), and symlinks each
    one into `./agents` and `./skills`. Directories listed in the
    script's `EXCLUDE_DIRS` (`.git`, `node_modules`, `in-progress`,
