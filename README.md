@@ -14,7 +14,8 @@ per tool.
 2. Scans that tree, plus this repo's own `./local` tree, for agents
    (`*.md` files directly inside a directory named `agents`) and skills
    (any directory directly containing a `SKILL.md`), and symlinks each
-   one into `./agents` and `./skills`.
+   one into `./agents` and `./skills`. When two sources provide the
+   same name, `./local` wins.
 3. Ensures `~/.agents` is a symlink to this repo directory (detected
    dynamically, regardless of what this checkout is named or where it
    lives), then symlinks `~/.agents/agents` and `~/.agents/skills` into

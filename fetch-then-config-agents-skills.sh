@@ -14,6 +14,8 @@
 #               "agents" (this skips per-skill "agents" metadata folders
 #               that only hold non-agent files, e.g. openai.yaml).
 #   - Skill   = any directory that directly contains a SKILL.md file.
+# On a name collision the hand-authored ./local entry wins over a
+# fetched one.
 #
 # ~/.agents itself is (re)linked to point at the directory this script
 # lives in, whatever that repo checkout happens to be named, so this repo
@@ -135,27 +137,48 @@ link_into() {
   ln -sfn "$rel" "$dest"
 }
 
-agent_count=0
-while IFS= read -r -d '' agents_dir; do
-  while IFS= read -r -d '' agent_md; do
-    name="$(basename "$agent_md")"
-    link_into "$agent_md" "$AGENTS_DIR" "$name"
-    echo "Found agent: $name (in $agents_dir)"
-    agent_count=$((agent_count + 1))
-  done < <(find "$agents_dir" -maxdepth 1 -type f -name '*.md' -print0 | sort -z)
-done < <(find "$SOURCE_DIR" "$LOCAL_DIR" -type d -name agents -print0 | sort -z)
+# Record target $3 as the source for name $2 in the associative array
+# named $1, noting when it replaces an earlier source of the same name.
+choose() {
+  local -n chosen="$1"
+  local name="$2" target="$3"
+  if [[ -n "${chosen[$name]:-}" ]]; then
+    echo "Note: '$name' from $target overrides ${chosen[$name]}" >&2
+  fi
+  chosen[$name]="$target"
+}
 
-skill_count=0
-while IFS= read -r -d '' skill_md; do
-  skill_dir="$(dirname "$skill_md")"
-  name="$(basename "$skill_dir")"
-  link_into "$skill_dir" "$SKILLS_DIR" "$name"
-  echo "Found skill: $name (in $skill_dir)"
-  skill_count=$((skill_count + 1))
-done < <(find "$SOURCE_DIR" "$LOCAL_DIR" -type f -name 'SKILL.md' -print0 | sort -z)
+# Link every name -> target pair of the associative array named $2 into
+# directory $1.
+sync_links() {
+  local link_dir="$1" name
+  local -n wanted="$2"
+  while IFS= read -r -d '' name; do
+    link_into "${wanted[$name]}" "$link_dir" "$name"
+  done < <(printf '%s\0' "${!wanted[@]}" | sort -z)
+}
 
-echo "Linked $agent_count agent(s) into $AGENTS_DIR"
-echo "Linked $skill_count skill(s) into $SKILLS_DIR"
+# Fetched repos are scanned first and ./local last, so a hand-authored
+# agent or skill replaces a fetched one of the same name.
+declare -A agent_targets=() skill_targets=()
+for root in "$SOURCE_DIR" "$LOCAL_DIR"; do
+  while IFS= read -r -d '' agents_dir; do
+    while IFS= read -r -d '' agent_md; do
+      choose agent_targets "$(basename "$agent_md")" "$agent_md"
+    done < <(find "$agents_dir" -maxdepth 1 -type f -name '*.md' -print0 | sort -z)
+  done < <(find "$root" -type d -name agents -print0 | sort -z)
+
+  while IFS= read -r -d '' skill_md; do
+    skill_dir="$(dirname "$skill_md")"
+    choose skill_targets "$(basename "$skill_dir")" "$skill_dir"
+  done < <(find "$root" -type f -name 'SKILL.md' -print0 | sort -z)
+done
+
+sync_links "$AGENTS_DIR" agent_targets
+sync_links "$SKILLS_DIR" skill_targets
+
+echo "Linked ${#agent_targets[@]} agent(s) into $AGENTS_DIR"
+echo "Linked ${#skill_targets[@]} skill(s) into $SKILLS_DIR"
 
 # Expose the aggregated agents/skills directories to other AI coding
 # tools via symlinks, so this repo stays the single source of truth
