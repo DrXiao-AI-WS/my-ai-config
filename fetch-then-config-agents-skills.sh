@@ -113,10 +113,6 @@ fi
 SOURCE_DIR="$(realpath -m "$SOURCE_DIR")"
 mkdir -p "$AGENTS_DIR" "$SKILLS_DIR" "$LOCAL_DIR/agents" "$LOCAL_DIR/skills"
 
-# Drop stale symlinks left over from previous runs whose source no longer
-# exists, so removed/renamed agents and skills don't linger.
-find "$AGENTS_DIR" "$SKILLS_DIR" -maxdepth 1 -xtype l -delete
-
 # Directory names never descended into while scanning: VCS metadata,
 # vendored dependencies, and upstream work that is unfinished or retired.
 EXCLUDE_DIRS=(.git node_modules in-progress deprecated)
@@ -167,13 +163,21 @@ choose() {
 }
 
 # Link every name -> target pair of the associative array named $2 into
-# directory $1.
+# directory $1, then remove any other symlink found there, so agents and
+# skills that were removed, renamed, or newly excluded don't linger.
+# Non-symlink entries are left alone.
 sync_links() {
-  local link_dir="$1" name
+  local link_dir="$1" name link
   local -n wanted="$2"
   while IFS= read -r -d '' name; do
     link_into "${wanted[$name]}" "$link_dir" "$name"
   done < <(printf '%s\0' "${!wanted[@]}" | sort -z)
+  while IFS= read -r -d '' link; do
+    if [[ -z "${wanted[$(basename "$link")]:-}" ]]; then
+      echo "Removing stale link: $link"
+      rm -- "$link"
+    fi
+  done < <(find "$link_dir" -maxdepth 1 -type l -print0)
 }
 
 # Fetched repos are scanned first and ./local last, so a hand-authored

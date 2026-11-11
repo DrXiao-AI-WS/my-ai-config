@@ -18,7 +18,7 @@ per tool.
    script's `EXCLUDE_DIRS` (`.git`, `node_modules`, `in-progress`,
    `deprecated`) are skipped, so unfinished or retired upstream skills
    are not exposed. When two sources provide the same name, `./local`
-   wins.
+   wins. Links whose source is gone or newly excluded are removed.
 3. Ensures `~/.agents` is a symlink to this repo directory (detected
    dynamically, regardless of what this checkout is named or where it
    lives), then symlinks `~/.agents/agents` and `~/.agents/skills` into
