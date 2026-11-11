@@ -14,8 +14,9 @@
 #               "agents" (this skips per-skill "agents" metadata folders
 #               that only hold non-agent files, e.g. openai.yaml).
 #   - Skill   = any directory that directly contains a SKILL.md file.
-# On a name collision the hand-authored ./local entry wins over a
-# fetched one.
+# Directories named in EXCLUDE_DIRS (unfinished or retired upstream work,
+# vendored dependencies) are never scanned. On a name collision the
+# hand-authored ./local entry wins over a fetched one.
 #
 # ~/.agents itself is (re)linked to point at the directory this script
 # lives in, whatever that repo checkout happens to be named, so this repo
@@ -116,6 +117,23 @@ mkdir -p "$AGENTS_DIR" "$SKILLS_DIR" "$LOCAL_DIR/agents" "$LOCAL_DIR/skills"
 # exists, so removed/renamed agents and skills don't linger.
 find "$AGENTS_DIR" "$SKILLS_DIR" -maxdepth 1 -xtype l -delete
 
+# Directory names never descended into while scanning: VCS metadata,
+# vendored dependencies, and upstream work that is unfinished or retired.
+EXCLUDE_DIRS=(.git node_modules in-progress deprecated)
+
+# Print, NUL-delimited and sorted, every path under root $1 matching the
+# remaining find(1) arguments, skipping anything below an EXCLUDE_DIRS
+# directory.
+scan() {
+  local root="$1" dir
+  shift
+  local prune=()
+  for dir in "${EXCLUDE_DIRS[@]}"; do
+    prune+=(-o -name "$dir")
+  done
+  find "$root" -type d \( "${prune[@]:1}" \) -prune -o "$@" -print0 | sort -z
+}
+
 # Create (or refresh) a relative symlink named $3 inside directory $2,
 # pointing at $1. Warns when it replaces a link to a different target
 # (name collision between two sources), and refuses to touch anything
@@ -166,12 +184,12 @@ for root in "$SOURCE_DIR" "$LOCAL_DIR"; do
     while IFS= read -r -d '' agent_md; do
       choose agent_targets "$(basename "$agent_md")" "$agent_md"
     done < <(find "$agents_dir" -maxdepth 1 -type f -name '*.md' -print0 | sort -z)
-  done < <(find "$root" -type d -name agents -print0 | sort -z)
+  done < <(scan "$root" -type d -name agents)
 
   while IFS= read -r -d '' skill_md; do
     skill_dir="$(dirname "$skill_md")"
     choose skill_targets "$(basename "$skill_dir")" "$skill_dir"
-  done < <(find "$root" -type f -name 'SKILL.md' -print0 | sort -z)
+  done < <(scan "$root" -type f -name 'SKILL.md')
 done
 
 sync_links "$AGENTS_DIR" agent_targets
